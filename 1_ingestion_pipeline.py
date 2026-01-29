@@ -3,7 +3,7 @@ from langchain_community.document_loaders import (
     PyPDFLoader,
     UnstructuredExcelLoader   
 )
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
@@ -52,7 +52,7 @@ def ingest_documents():
     # ---------------------------
     # Text splitting (UNCHANGED)
     # ---------------------------
-    splitter = CharacterTextSplitter(
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=100
     )

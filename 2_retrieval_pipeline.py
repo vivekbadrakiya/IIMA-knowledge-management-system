@@ -1,36 +1,34 @@
+import os
 from langchain_chroma import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 PERSIST_DIR = "db/chroma_db"
 
-def get_retriever(k=5):
-    print("🔹 Loading vector store...")
+def initialize_retriever():
+    print("🔹 Initializing retrieval pipeline...")
+
+    if not os.path.exists(PERSIST_DIR):
+        raise FileNotFoundError("❌ Chroma DB not found. Run ingestion pipeline first.")
 
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    db = Chroma(
+    vector_db = Chroma(
         persist_directory=PERSIST_DIR,
         embedding_function=embeddings
     )
 
-    retriever = db.as_retriever(search_kwargs={"k": k})
+    retriever = vector_db.as_retriever(
+        search_kwargs={"k": 3}
+    )
 
-    print("✅ Retriever ready. You can now ask questions.")
+    print("✅ Retrieval pipeline ready.")
+    print("📌 Vector store loaded successfully.")
+    print("📌 Retriever initialized (k=3).")
+
     return retriever
 
 
 if __name__ == "__main__":
-    retriever = get_retriever()
-
-    while True:
-        query = input("\nAsk a question (type 'exit' to quit): ")
-        if query.lower() == "exit":
-            break
-
-        docs = retriever.invoke(query)
-
-        print("\n--- Retrieved Context ---")
-        for i, doc in enumerate(docs, 1):
-            print(f"\nChunk {i}:\n{doc.page_content[:500]}...")
+    initialize_retriever()
