@@ -20,12 +20,12 @@ def initialize_retriever():
     )
 
     retriever = vector_db.as_retriever(
-        search_kwargs={"k": 3}
+        search_kwargs={"k": 5}
     )
 
     print("✅ Retrieval pipeline ready.")
     print("📌 Vector store loaded successfully.")
-    print("📌 Retriever initialized (k=3).")
+    print("📌 Retriever initialized (k=5).")
 
     return retriever
 
