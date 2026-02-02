@@ -26,7 +26,7 @@ TEMPERATURE = 0.0  # 0 = factual, 1 = creative
 # -----------------------------
 # Initialize Components
 # -----------------------------
-# print("Loading chatbot...")
+print("🔧 Loading chatbot...")
 
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -42,7 +42,7 @@ llm = OllamaLLM(
     temperature=TEMPERATURE
 )
 
-# print("Chatbot ready!\n")
+print("✅ Chatbot ready!\n")
 
 # -----------------------------
 # Query Expansion (helps find synonyms)
@@ -90,15 +90,17 @@ answer_prompt = PromptTemplate(
 
 RULES:
 1. Use ONLY information from the context
-2. Be direct and concise
-3. If not in context, say: "I cannot find this information in the provided documents."
+2. Provide a COMPLETE and DETAILED answer (at least 4-5 sentences)
+3. Include all relevant details, examples, and specifics from the context
+4. Organize the information clearly with proper explanation
+5. If not in context, say: "I cannot find this information in the provided documents."
 
 Context:
 {context}
 
 Question: {question}
 
-Answer:"""
+Detailed Answer (minimum 4 sentences):"""
 )
 
 # -----------------------------
@@ -138,13 +140,19 @@ def chat(user_question):
     
     # Build context
     context_parts = []
-    sources = set()
+    source_file = None
+    first_page = None
     
-    for doc in docs:
+    for i, doc in enumerate(docs):
         context_parts.append(doc.page_content)
-        source = doc.metadata.get('source', 'Unknown')
-        page = doc.metadata.get('page', 'Unknown')
-        sources.add(f"{source} (Page {page})")
+        
+        # Only capture the FIRST source and page (most relevant)
+        if i == 0:
+            source_file = doc.metadata.get('source', 'Unknown')
+            # Try to get page number, but don't show if unreliable
+            page = doc.metadata.get('page')
+            if page and isinstance(page, int):
+                first_page = page
     
     context = "\n\n".join(context_parts)
     
@@ -163,11 +171,11 @@ def chat(user_question):
             'source': None
         }
     
-    # Format sources
-    source_list = list(sources)[:3]
-    source_info = f"Source: {', '.join(source_list)}"
-    if len(sources) > 3:
-        source_info += f" +{len(sources)-3} more"
+    # Format source - just file name, no page numbers
+    if source_file and source_file != 'Unknown':
+        source_info = f"Source: {source_file}"
+    else:
+        source_info = None
     
     return {
         'answer': answer,
@@ -177,7 +185,9 @@ def chat(user_question):
 # -----------------------------
 # Chat Interface
 # -----------------------------
-print("RAG Chatbot")
+print("=" * 70)
+print("🤖 RAG Chatbot")
+print("=" * 70)
 print("Commands: 'exit' to quit\n")
 
 while True:
