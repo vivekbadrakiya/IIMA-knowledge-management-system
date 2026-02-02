@@ -4,9 +4,6 @@ PDF Splitter Utility
 Simple utility to split large PDFs into smaller, manageable chunks.
 Useful for processing very large PDFs that exceed system capabilities.
 
-Usage:
-    python pdf_splitter.py input.pdf --pages 100
-    python pdf_splitter.py input.pdf --size 50
 """
 
 import os

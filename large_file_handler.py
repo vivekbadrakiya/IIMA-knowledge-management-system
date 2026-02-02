@@ -418,7 +418,6 @@ def process_large_file_cli():
     
     processor = LargeFileProcessor(config)
     
-    # Show estimates
     estimates = processor.get_file_size_estimate(file_path)
     
     print("\n" + "=" * 70)

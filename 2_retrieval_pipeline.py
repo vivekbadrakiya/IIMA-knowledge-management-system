@@ -25,7 +25,6 @@ def initialize_retriever():
 
     print("✅ Retrieval pipeline ready.")
     print("📌 Vector store loaded successfully.")
-    print("📌 Retriever initialized (k=5).")
 
     return retriever
 

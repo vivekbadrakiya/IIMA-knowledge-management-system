@@ -126,7 +126,7 @@ def keyword_search(keyword):
     
     print("=" * 70)
 
-# Main loop
+# MAIN LOOP
 while True:
     command = input("\nEnter command: ").strip()
     

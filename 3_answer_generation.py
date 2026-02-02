@@ -20,8 +20,8 @@ from langchain_core.prompts import PromptTemplate
 # -----------------------------
 PERSIST_DIR = "db/chroma_db"
 MODEL_NAME = "llama3.2:3b"
-K_CHUNKS = 10  # Number of document chunks to retrieve
-TEMPERATURE = 0.0  # 0 = factual, 1 = creative
+K_CHUNKS = 5  # Reduced from 10 (each chunk is now a FULL PAGE, not 1000 chars)
+TEMPERATURE = 0.0  # Factual mode
 
 # -----------------------------
 # Initialize Components
