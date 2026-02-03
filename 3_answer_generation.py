@@ -1,13 +1,11 @@
 """
-Answer Generation Pipeline - PRODUCTION VERSION
+FIXED Answer Generation
 
-Replace your current 3_answer_generation.py with this file.
-
-This file:
-1. Retrieves relevant documents from vector database
-2. Generates answers using LLM
-3. Handles conversation
-4. Main chatbot interface
+Key Fixes:
+1. Strict anti-hallucination prompt
+2. Forces LLM to only use provided context
+3. Better page number extraction (1-indexed)
+4. Filters to prioritize Excel results for Excel queries
 """
 
 from langchain_chroma import Chroma
@@ -20,12 +18,10 @@ from langchain_core.prompts import PromptTemplate
 # -----------------------------
 PERSIST_DIR = "db/chroma_db"
 MODEL_NAME = "llama3.2:3b"
-K_CHUNKS = 5  # Reduced from 10 (each chunk is now a FULL PAGE, not 1000 chars)
-TEMPERATURE = 0.0  # Factual mode
+K_CHUNKS = 10  # Retrieve more chunks to ensure we get Excel data
+TEMPERATURE = 0.0
 
-# -----------------------------
-# Initialize Components
-# -----------------------------
+# Initialize
 print("🔧 Loading chatbot...")
 
 embeddings = HuggingFaceEmbeddings(
@@ -45,21 +41,18 @@ llm = OllamaLLM(
 print("✅ Chatbot ready!\n")
 
 # -----------------------------
-# Query Expansion (helps find synonyms)
+# Query Expansion
 # -----------------------------
 def expand_query(query):
-    """
-    Expands query with synonyms for better retrieval
-    Example: "penalties" → "penalties disciplinary sanctions punishment"
-    """
+    """Expand query with synonyms"""
     expansions = {
-        'penalty': ['penalties', 'disciplinary', 'sanctions', 'punishment', 'fine'],
-        'leave': ['leave', 'absence', 'time off', 'vacation', 'holiday'],
-        'salary': ['salary', 'compensation', 'pay', 'wages', 'remuneration'],
-        'hours': ['hours', 'working time', 'shift', 'schedule'],
-        'termination': ['termination', 'dismissal', 'firing', 'separation'],
-        'benefit': ['benefits', 'perks', 'allowance', 'compensation'],
-        'policy': ['policy', 'rule', 'regulation', 'guideline', 'procedure'],
+        'designation': ['designation', 'job title', 'position', 'role'],
+        'salary': ['salary', 'compensation', 'pay', 'wages', 'gross salary', 'net salary'],
+        'name': ['name', 'employee name', 'person'],
+        'department': ['department', 'division', 'team'],
+        'training': ['training', 'program', 'course'],
+        'leave': ['leave', 'absence', 'vacation'],
+        'budget': ['budget', 'allocation', 'spending'],
     }
     
     query_lower = query.lower()
@@ -73,61 +66,63 @@ def expand_query(query):
     return ' '.join(expanded[:5])
 
 # -----------------------------
-# Prompts
+# Prompts with STRICT Anti-Hallucination
 # -----------------------------
-standalone_prompt = PromptTemplate(
-    input_variables=["question"],
-    template="""Extract the core topic from this question as a search query.
 
-Question: {question}
-
-Search Query (5-10 words):"""
-)
-
+# CRITICAL: Very strict prompt to prevent hallucination
 answer_prompt = PromptTemplate(
     input_variables=["context", "question"],
-    template="""Answer the question using ONLY the context below.
+    template="""You are a document assistant. Answer the question using ONLY the exact information from the context below.
 
-RULES:
-1. Use ONLY information from the context
-2. Provide a COMPLETE and DETAILED answer (at least 4-5 sentences)
-3. Include all relevant details, examples, and specifics from the context
-4. Organize the information clearly with proper explanation
-5. If not in context, say: "I cannot find this information in the provided documents."
+CRITICAL RULES - YOU MUST FOLLOW THESE:
+1. Use ONLY information that is EXPLICITLY stated in the context
+2. DO NOT make up information, infer, or guess
+3. DO NOT use your general knowledge
+4. If the answer is NOT in the context, you MUST say: "I cannot find this information in the provided documents."
+5. DO NOT say "according to the manual" or "based on the policy" unless that exact text is in the context
+6. Copy relevant details DIRECTLY from the context
+7. Provide a COMPLETE and DETAILED answer (4-5 sentences) using ONLY context information
 
 Context:
 {context}
 
 Question: {question}
 
-Detailed Answer (minimum 4 sentences):"""
+Answer (use ONLY the context above):"""
 )
+
+# -----------------------------
+# Smart retrieval with source filtering
+# -----------------------------
+def detect_query_type(query):
+    """Detect if query is asking about Excel data"""
+    query_lower = query.lower()
+    
+    # Employee/person queries
+    person_indicators = ['rajesh', 'priya', 'amit', 'sneha', 'vikram', 'anjali', 
+                        'rohit', 'kavita', 'arjun', 'pooja', 'employee', 'person']
+    
+    # Excel-specific queries
+    excel_indicators = ['salary', 'designation', 'department', 'training', 
+                       'budget', 'leave application', 'participant', 'program']
+    
+    is_person_query = any(name in query_lower for name in person_indicators)
+    is_excel_query = any(indicator in query_lower for indicator in excel_indicators)
+    
+    return 'excel' if (is_person_query or is_excel_query) else 'general'
 
 # -----------------------------
 # Main Chat Function
 # -----------------------------
 def chat(user_question):
     """
-    Main chat function
-    
-    Args:
-        user_question: User's question
-        
-    Returns:
-        dict with 'answer' and 'source'
+    Main chat function with anti-hallucination
     """
-    # Generate search query
-    search_query = llm.invoke(
-        standalone_prompt.format(question=user_question)
-    ).strip()
+    # Detect query type
+    query_type = detect_query_type(user_question)
     
-    # Clean search query
-    search_query = search_query.replace('"', '').strip()
-    if len(search_query) < 3:
-        search_query = user_question
-    
-    # Expand with synonyms
-    expanded_query = expand_query(search_query)
+    # Expand query
+    expanded_query = expand_query(user_question)
     
     # Retrieve documents
     docs = db.similarity_search(expanded_query, k=K_CHUNKS)
@@ -135,28 +130,43 @@ def chat(user_question):
     if not docs:
         return {
             'answer': "I cannot find relevant information in the documents.",
-            'source': None
+            'source': None,
+            'page': None
         }
     
-    # Build context
+    # If Excel query, prioritize Excel documents
+    if query_type == 'excel':
+        excel_docs = [d for d in docs if d.metadata.get('file_type') == 'excel']
+        if excel_docs:
+            # Use only Excel docs for Excel queries
+            docs = excel_docs[:5]  # Top 5 Excel results
+    
+    # Build context from retrieved docs
     context_parts = []
-    source_file = None
-    first_page = None
     
-    for i, doc in enumerate(docs):
+    for doc in docs:
         context_parts.append(doc.page_content)
-        
-        # Only capture the FIRST source and page (most relevant)
-        if i == 0:
-            source_file = doc.metadata.get('source', 'Unknown')
-            # Try to get page number, but don't show if unreliable
-            page = doc.metadata.get('page')
-            if page and isinstance(page, int):
-                first_page = page
     
-    context = "\n\n".join(context_parts)
+    context = "\n\n---\n\n".join(context_parts)
     
-    # Generate answer
+    # Get metadata from FIRST (most relevant) document
+    first_doc = docs[0]
+    source_file = first_doc.metadata.get('source', 'Unknown')
+    source_type = first_doc.metadata.get('source_type', 'Document')
+    
+    # Get page/row reference
+    if source_type == 'PDF':
+        # For PDF, get the actual page number (1-indexed)
+        page_num = first_doc.metadata.get('page', 0)
+        page_display = f"Page {page_num + 1}"  # +1 for 1-indexing
+    elif source_type == 'Excel':
+        # For Excel, show sheet name
+        sheet_name = first_doc.metadata.get('sheet_name', 'Sheet1')
+        page_display = f"Sheet: {sheet_name}"
+    else:
+        page_display = None
+    
+    # Generate answer with STRICT anti-hallucination prompt
     answer = llm.invoke(
         answer_prompt.format(
             context=context,
@@ -165,30 +175,31 @@ def chat(user_question):
     ).strip()
     
     # Check if answer is valid
-    if "cannot find" in answer.lower():
+    if "cannot find" in answer.lower() or "not mentioned" in answer.lower():
         return {
-            'answer': answer,
-            'source': None
+            'answer': "I cannot find this information in the provided documents.",
+            'source': None,
+            'page': None
         }
-    
-    # Format source - just file name, no page numbers
-    if source_file and source_file != 'Unknown':
-        source_info = f"Source: {source_file}"
-    else:
-        source_info = None
     
     return {
         'answer': answer,
-        'source': source_info
+        'source': source_file,
+        'page': page_display,
+        'source_type': source_type
     }
 
 # -----------------------------
 # Chat Interface
 # -----------------------------
 print("=" * 70)
-print("🤖 RAG Chatbot")
+print("🤖 FIXED RAG Chatbot (Anti-Hallucination)")
 print("=" * 70)
-print("Commands: 'exit' to quit\n")
+print("Improvements:")
+print("  • Strict context-only responses")
+print("  • Better Excel data retrieval")
+print("  • Accurate page numbers")
+print("\nCommands: 'exit' to quit\n")
 
 while True:
     user_input = input("You: ").strip()
@@ -203,10 +214,16 @@ while True:
     try:
         result = chat(user_input)
         
+        # Display answer
         print(f"\nBot: {result['answer']}")
         
+        # Display source and page
         if result['source']:
-            print(f"     ({result['source']})")
+            source_line = f"     (Source: {result['source']}"
+            if result['page']:
+                source_line += f", {result['page']}"
+            source_line += ")"
+            print(source_line)
         
         print()
         
