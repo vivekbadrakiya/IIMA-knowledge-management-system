@@ -26,7 +26,7 @@ def load_pdfs():
     
     pdf_files = [f for f in os.listdir(PDF_DIR) if f.endswith(".pdf")]
     
-    print(f"📄 Loading {len(pdf_files)} PDF file(s)...")
+    print(f" Loading {len(pdf_files)} PDF file(s)...")
     
     for pdf_file in pdf_files:
         pdf_path = os.path.join(PDF_DIR, pdf_file)
@@ -34,9 +34,9 @@ def load_pdfs():
             loader = PyPDFLoader(pdf_path)
             pages = loader.load()
             documents.extend(pages)
-            print(f"   ✅ {pdf_file}: {len(pages)} pages")
+            print(f"    {pdf_file}: {len(pages)} pages")
         except Exception as e:
-            print(f"   ❌ Error loading {pdf_file}: {e}")
+            print(f"    Error loading {pdf_file}: {e}")
     
     return documents
 
@@ -50,7 +50,7 @@ def load_excel_files():
     excel_files = [f for f in os.listdir(EXCEL_DIR) 
                    if f.endswith((".xlsx", ".xls", ".csv"))]
     
-    print(f"\n📊 Loading {len(excel_files)} Excel file(s)...")
+    print(f"\n Loading {len(excel_files)} Excel file(s)...")
     
     for excel_file in excel_files:
         excel_path = os.path.join(EXCEL_DIR, excel_file)
@@ -80,18 +80,15 @@ def load_excel_files():
                 )
                 documents.append(doc)
             
-            print(f"   ✅ {excel_file}: {len(df)} rows")
+            print(f"    {excel_file}: {len(df)} rows")
             
         except Exception as e:
-            print(f"   ❌ Error loading {excel_file}: {e}")
+            print(f"    Error loading {excel_file}: {e}")
     
     return documents
 
 def create_database():
-    """Create vector database from all documents"""
-    print("\n" + "=" * 60)
     print("CREATING VECTOR DATABASE")
-    print("=" * 60)
     
     # Load all documents
     pdf_docs = load_pdfs()
@@ -100,10 +97,10 @@ def create_database():
     all_docs = pdf_docs + excel_docs
     
     if not all_docs:
-        print("❌ No documents found!")
+        print(" No documents found!")
         return False
     
-    print(f"\n📊 Total: {len(all_docs)} chunks")
+    print(f"\n Total: {len(all_docs)} chunks")
     print(f"   PDF: {len(pdf_docs)} pages")
     print(f"   Excel: {len(excel_docs)} rows")
     
@@ -121,7 +118,7 @@ def create_database():
         persist_directory=PERSIST_DIR
     )
     
-    print("\n✅ Database created successfully!")
+    print("\n Database created successfully!")
     return True
 
 # STEP 2: CHATBOT
